@@ -1,0 +1,1320 @@
+[33mcommit a1ed5823eccd424bd3b2d99aeca6a62dee80be54[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m)[m
+Author: SKCC <SKCC@SKCC16D00078.SKCC.NET>
+Date:   Fri Jul 3 14:06:25 2020 +0900
+
+    first commit
+
+[1mdiff --git a/Dockerfile b/Dockerfile[m
+[1mnew file mode 100644[m
+[1mindex 0000000..a02fed4[m
+[1m--- /dev/null[m
+[1m+++ b/Dockerfile[m
+[36m@@ -0,0 +1,4 @@[m
+[32m+[m[32mFROM openjdk:8u212-jdk-alpine[m
+[32m+[m[32mCOPY target/*SNAPSHOT.jar app.jar[m
+[32m+[m[32mEXPOSE 8080[m
+[32m+[m[32mENTRYPOINT ["java","-Xmx400M","-Djava.security.egd=file:/dev/./urandom","-jar","/app.jar","--spring.profiles.active=docker"][m
+[1mdiff --git a/azure-pipelines.yml b/azure-pipelines.yml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e05d205[m
+[1m--- /dev/null[m
+[1m+++ b/azure-pipelines.yml[m
+[36m@@ -0,0 +1,147 @@[m
+[32m+[m[32m# Deploy to Azure Kubernetes Service[m
+[32m+[m[32m# Build and push image to Azure Container Registry; Deploy to Azure Kubernetes Service[m
+[32m+[m[32m# https://docs.microsoft.com/azure/devops/pipelines/languages/docker[m
+[32m+[m
+[32m+[m[32mtrigger:[m
+[32m+[m[32m- master[m
+[32m+[m
+[32m+[m[32mresources:[m
+[32m+[m[32m- repo: self[m
+[32m+[m
+[32m+[m[32mvariables:[m
+[32m+[m[32m- group: common-value[m
+[32m+[m[32m  # containerRegistry: 'event.azurecr.io'[m
+[32m+[m[32m  # containerRegistryDockerConnection: 'acr'[m
+[32m+[m[32m  # environment: 'aks.default'[m
+[32m+[m[32m- name: imageRepository[m
+[32m+[m[32m  value: 'delivery'[m
+[32m+[m[32m- name: dockerfilePath[m
+[32m+[m[32m  value: '**/Dockerfile'[m
+[32m+[m[32m- name: tag[m
+[32m+[m[32m  value: '$(Build.BuildId)'[m
+[32m+[m[32m  # Agent VM image name[m
+[32m+[m[32m- name: vmImageName[m
+[32m+[m[32m  value: 'ubuntu-latest'[m
+[32m+[m[32m- name: MAVEN_CACHE_FOLDER[m
+[32m+[m[32m  value: $(Pipeline.Workspace)/.m2/repository[m
+[32m+[m[32m- name: MAVEN_OPTS[m
+[32m+[m[32m  value: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'[m
+[32m+[m
+[32m+[m
+[32m+[m[32mstages:[m
+[32m+[m[32m- stage: Build[m
+[32m+[m[32m  displayName: Build stage[m
+[32m+[m[32m  jobs:[m
+[32m+[m[32m  - job: Build[m
+[32m+[m[32m    displayName: Build[m
+[32m+[m[32m    pool:[m
+[32m+[m[32m      vmImage: $(vmImageName)[m
+[32m+[m[32m    steps:[m
+[32m+[m[32m    - task: CacheBeta@1[m
+[32m+[m[32m      inputs:[m
+[32m+[m[32m        key: 'maven | "$(Agent.OS)" | **/pom.xml'[m
+[32m+[m[32m        restoreKeys: |[m
+[32m+[m[32m           maven | "$(Agent.OS)"[m
+[32m+[m[32m           maven[m
+[32m+[m[32m        path: $(MAVEN_CACHE_FOLDER)[m
+[32m+[m[32m      displayName: Cache Maven local repo[m
+[32m+[m[32m    - task: Maven@3[m
+[32m+[m[32m      inputs:[m
+[32m+[m[32m        mavenPomFile: 'pom.xml'[m
+[32m+[m[32m        options: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'[m
+[32m+[m[32m        javaHomeOption: 'JDKVersion'[m
+[32m+[m[32m        jdkVersionOption: '1.8'[m
+[32m+[m[32m        jdkArchitectureOption: 'x64'[m
+[32m+[m[32m        goals: 'package'[m
+[32m+[m[32m    - task: Docker@2[m
+[32m+[m[32m      inputs:[m
+[32m+[m[32m        containerRegistry: $(containerRegistryDockerConnection)[m
+[32m+[m[32m        repository: $(imageRepository)[m
+[32m+[m[32m        command: 'buildAndPush'[m
+[32m+[m[32m        Dockerfile: '**/Dockerfile'[m
+[32m+[m[32m        tags: |[m
+[32m+[m[32m          $(tag)[m
+[32m+[m
+[32m+[m[32m- stage: Deploy[m
+[32m+[m[32m  displayName: Deploy stage[m
+[32m+[m[32m  dependsOn: Build[m
+[32m+[m
+[32m+[m[32m  jobs:[m
+[32m+[m[32m  - deployment: Deploy[m
+[32m+[m[32m    displayName: Deploy[m
+[32m+[m[32m    pool:[m
+[32m+[m[32m      vmImage: $(vmImageName)[m
+[32m+[m[32m    environment: $(environment)[m
+[32m+[m[32m    strategy:[m
+[32m+[m[32m      runOnce:[m
+[32m+[m[32m        deploy:[m
+[32m+[m[32m          steps:[m
+[32m+[m[32m          - task: Kubernetes@1[m
+[32m+[m[32m            inputs:[m
+[32m+[m[32m              connectionType: 'Kubernetes Service Connection'[m
+[32m+[m[32m              namespace: 'default'[m
+[32m+[m[32m              command: 'apply'[m
+[32m+[m[32m              useConfigurationFile: true[m
+[32m+[m[32m              configurationType: 'inline'[m
+[32m+[m[32m              inline: |[m
+[32m+[m[32m                apiVersion: apps/v1[m
+[32m+[m[32m                kind: Deployment[m
+[32m+[m[32m                metadata:[m
+[32m+[m[32m                  name: $(imageRepository)[m
+[32m+[m[32m                  labels:[m
+[32m+[m[32m                    app: $(imageRepository)[m
+[32m+[m[32m                spec:[m
+[32m+[m[32m                  replicas: 1[m
+[32m+[m[32m                  selector:[m
+[32m+[m[32m                    matchLabels:[m
+[32m+[m[32m                      app: $(imageRepository)[m
+[32m+[m[32m                  template:[m
+[32m+[m[32m                    metadata:[m
+[32m+[m[32m                      labels:[m
+[32m+[m[32m                        app: $(imageRepository)[m
+[32m+[m[32m                    spec:[m
+[32m+[m[32m                      containers:[m
+[32m+[m[32m                        - name: $(imageRepository)[m
+[32m+[m[32m                          image: $(containerRegistry)/$(imageRepository):$(tag)[m
+[32m+[m[32m                          ports:[m
+[32m+[m[32m                            - containerPort: 8080[m
+[32m+[m[32m                          readinessProbe:[m
+[32m+[m[32m                            httpGet:[m
+[32m+[m[32m                              path: /actuator/health[m
+[32m+[m[32m                              port: 8080[m
+[32m+[m[32m                            initialDelaySeconds: 10[m
+[32m+[m[32m                            timeoutSeconds: 2[m
+[32m+[m[32m                            periodSeconds: 5[m
+[32m+[m[32m                            failureThreshold: 10[m
+[32m+[m[32m                          livenessProbe:[m
+[32m+[m[32m                            httpGet:[m
+[32m+[m[32m                              path: /products/1[m
+[32m+[m[32m                              port: 8080[m
+[32m+[m[32m                            initialDelaySeconds: 120[m
+[32m+[m[32m                            timeoutSeconds: 2[m
+[32m+[m[32m                            periodSeconds: 5[m
+[32m+[m[32m                            failureThreshold: 5[m
+[32m+[m[32m              secretType: 'dockerRegistry'[m
+[32m+[m[32m              containerRegistryType: 'Azure Container Registry'[m
+[32m+[m[32m          - task: Kubernetes@1[m
+[32m+[m[32m            inputs:[m
+[32m+[m[32m              connectionType: 'Kubernetes Service Connection'[m
+[32m+[m[32m              namespace: 'default'[m
+[32m+[m[32m              command: 'apply'[m
+[32m+[m[32m              useConfigurationFile: true[m
+[32m+[m[32m              configurationType: 'inline'[m
+[32m+[m[32m              inline: |[m
+[32m+[m[32m                apiVersion: v1[m
+[32m+[m[32m                kind: Service[m
+[32m+[m[32m                metadata:[m
+[32m+[m[32m                  name: $(imageRepository)[m
+[32m+[m[32m                  labels:[m
+[32m+[m[32m                    app: $(imageRepository)[m
+[32m+[m[32m                spec:[m
+[32m+[m[32m                  ports:[m
+[32m+[m[32m                    - port: 8080[m
+[32m+[m[32m                      targetPort: 8080[m
+[32m+[m[32m                  selector:[m
+[32m+[m[32m                    app: $(imageRepository)[m
+[32m+[m[32m              secretType: 'dockerRegistry'[m
+[32m+[m[32m              containerRegistryType: 'Azure Container Registry'[m
+[1mdiff --git a/cloudbuild.yaml b/cloudbuild.yaml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..597d3a0[m
+[1m--- /dev/null[m
+[1m+++ b/cloudbuild.yaml[m
+[36m@@ -0,0 +1,103 @@[m
+[32m+[m[32msteps:[m
+[32m+[m[32m  ### Test[m
+[32m+[m[32m  #  - id: 'test'[m
+[32m+[m[32m  #    name: 'gcr.io/cloud-builders/mvn'[m
+[32m+[m[32m  #    args: [[m
+[32m+[m[32m  #      'test',[m
+[32m+[m[32m  #      '-Dspring.profiles.active=test'[m
+[32m+[m[32m  #    ][m
+[32m+[m[32m  ### Build[m
+[32m+[m[32m  - id: 'build'[m
+[32m+[m[32m    name: 'gcr.io/cloud-builders/mvn'[m
+[32m+[m[32m    args: [[m
+[32m+[m[32m      'clean',[m
+[32m+[m[32m      'package'[m
+[32m+[m[32m      #      '-Dmaven.test.skip=true'[m
+[32m+[m[32m    ][m
+[32m+[m[32m  #    waitFor: ['test'][m
+[32m+[m[32m  ### docker Build[m
+[32m+[m[32m  - id: 'docker build'[m
+[32m+[m[32m    name: 'gcr.io/cloud-builders/docker'[m
+[32m+[m[32m    args:[m
+[32m+[m[32m      - 'build'[m
+[32m+[m[32m      - '--tag=gcr.io/$PROJECT_ID/$_PROJECT_NAME:latest'[m
+[32m+[m[32m      - '.'[m
+[32m+[m[32m  ### Publish[m
+[32m+[m[32m  - id: 'publish'[m
+[32m+[m[32m    name: 'gcr.io/cloud-builders/docker'[m
+[32m+[m[32m    entrypoint: 'bash'[m
+[32m+[m[32m    args:[m
+[32m+[m[32m      - '-c'[m
+[32m+[m[32m      - |[m
+[32m+[m[32m        docker push gcr.io/$PROJECT_ID/$_PROJECT_NAME:latest[m
+[32m+[m[32m  ### deploy[m
+[32m+[m[32m  - id: 'deploy'[m
+[32m+[m[32m    name: 'gcr.io/cloud-builders/gcloud'[m
+[32m+[m[32m    entrypoint: 'bash'[m
+[32m+[m[32m    args:[m
+[32m+[m[32m      - '-c'[m
+[32m+[m[32m      - |[m
+[32m+[m[32m        PROJECT=$$(gcloud config get-value core/project)[m
+[32m+[m[32m        gcloud container clusters get-credentials "$${CLOUDSDK_CONTAINER_CLUSTER}" \[m
+[32m+[m[32m          --project "$${PROJECT}" \[m
+[32m+[m[32m          --zone "$${CLOUDSDK_COMPUTE_ZONE}"[m
+[32m+[m[32m        cat <<EOF | kubectl apply -f -[m
+[32m+[m[32m        apiVersion: v1[m
+[32m+[m[32m        kind: Service[m
+[32m+[m[32m        metadata:[m
+[32m+[m[32m          name: $_PROJECT_NAME[m
+[32m+[m[32m          labels:[m
+[32m+[m[32m            app: $_PROJECT_NAME[m
+[32m+[m[32m        spec:[m
+[32m+[m[32m          ports:[m
+[32m+[m[32m            - port: 8080[m
+[32m+[m[32m              targetPort: 8080[m
+[32m+[m[32m          selector:[m
+[32m+[m[32m            app: $_PROJECT_NAME[m
+[32m+[m[32m        EOF[m
+[32m+[m[32m        cat <<EOF | kubectl apply -f -[m
+[32m+[m[32m        apiVersion: apps/v1[m
+[32m+[m[32m        kind: Deployment[m
+[32m+[m[32m        metadata:[m
+[32m+[m[32m          name: $_PROJECT_NAME[m
+[32m+[m[32m          labels:[m
+[32m+[m[32m            app: $_PROJECT_NAME[m
+[32m+[m[32m        spec:[m
+[32m+[m[32m          replicas: 1[m
+[32m+[m[32m          selector:[m
+[32m+[m[32m            matchLabels:[m
+[32m+[m[32m              app: $_PROJECT_NAME[m
+[32m+[m[32m          template:[m
+[32m+[m[32m            metadata:[m
+[32m+[m[32m              labels:[m
+[32m+[m[32m                app: $_PROJECT_NAME[m
+[32m+[m[32m            spec:[m
+[32m+[m[32m              containers:[m
+[32m+[m[32m                - name: $_PROJECT_NAME[m
+[32m+[m[32m                  image: gcr.io/$PROJECT_ID/$_PROJECT_NAME:latest[m
+[32m+[m[32m                  ports:[m
+[32m+[m[32m                    - containerPort: 8080[m
+[32m+[m[32m                  readinessProbe:[m
+[32m+[m[32m                    httpGet:[m
+[32m+[m[32m                      path: /actuator/health[m
+[32m+[m[32m                      port: 8080[m
+[32m+[m[32m                    initialDelaySeconds: 10[m
+[32m+[m[32m                    timeoutSeconds: 2[m
+[32m+[m[32m                    periodSeconds: 5[m
+[32m+[m[32m                    failureThreshold: 10[m
+[32m+[m[32m                  livenessProbe:[m
+[32m+[m[32m                    httpGet:[m
+[32m+[m[32m                      path: /actuator/health[m
+[32m+[m[32m                      port: 8080[m
+[32m+[m[32m                    initialDelaySeconds: 120[m
+[32m+[m[32m                    timeoutSeconds: 2[m
+[32m+[m[32m                    periodSeconds: 5[m
+[32m+[m[32m                    failureThreshold: 5[m
+[32m+[m[32m        EOF[m
+[32m+[m[32msubstitutions:[m
+[32m+[m[32m  _PROJECT_NAME: delivery[m
+[32m+[m[32moptions:[m
+[32m+[m[32m  env:[m
+[32m+[m[32m    #    # location/name of GKE cluster (used by all kubectl commands)[m
+[32m+[m[32m    - CLOUDSDK_COMPUTE_ZONE=asia-northeast1-a[m
+[32m+[m[32m    - CLOUDSDK_CONTAINER_CLUSTER=cluster-1[m
+\ No newline at end of file[m
+[1mdiff --git a/delivery.iml b/delivery.iml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..71ed456[m
+[1m--- /dev/null[m
+[1m+++ b/delivery.iml[m
+[36m@@ -0,0 +1,155 @@[m
+[32m+[m[32m<?xml version="1.0" encoding="UTF-8"?>[m
+[32m+[m[32m<module org.jetbrains.idea.maven.project.MavenProjectsManager.isMavenModule="true" type="JAVA_MODULE" version="4">[m
+[32m+[m[32m  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_1_8">[m
+[32m+[m[32m    <output url="file://$MODULE_DIR$/target/classes" />[m
+[32m+[m[32m    <output-test url="file://$MODULE_DIR$/target/test-classes" />[m
+[32m+[m[32m    <content url="file://$MODULE_DIR$">[m
+[32m+[m[32m      <sourceFolder url="file://$MODULE_DIR$/src/main/java" isTestSource="false" />[m
+[32m+[m[32m      <sourceFolder url="file://$MODULE_DIR$/src/main/resources" type="java-resource" />[m
+[32m+[m[32m      <excludeFolder url="file://$MODULE_DIR$/target" />[m
+[32m+[m[32m    </content>[m
+[32m+[m[32m    <orderEntry type="inheritedJdk" />[m
+[32m+[m[32m    <orderEntry type="sourceFolder" forTests="false" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-data-jpa:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-aop:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-aop:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.aspectj:aspectjweaver:1.9.4" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-jdbc:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.zaxxer:HikariCP:3.2.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-jdbc:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: javax.transaction:javax.transaction-api:1.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: javax.xml.bind:jaxb-api:2.3.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: javax.activation:javax.activation-api:1.2.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.hibernate:hibernate-core:5.3.12.Final" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.jboss.logging:jboss-logging:3.3.3.Final" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: javax.persistence:javax.persistence-api:2.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.javassist:javassist:3.23.2-GA" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: net.bytebuddy:byte-buddy:1.9.16" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: antlr:antlr:2.7.7" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.jboss:jandex:2.0.5.Final" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml:classmate:1.4.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.dom4j:dom4j:2.1.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.hibernate.common:hibernate-commons-annotations:5.0.4.Final" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.glassfish.jaxb:jaxb-runtime:2.3.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.glassfish.jaxb:txw2:2.3.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.sun.istack:istack-commons-runtime:3.0.7" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.jvnet.staxex:stax-ex:1.8" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.sun.xml.fastinfoset:FastInfoset:1.2.15" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.data:spring-data-jpa:2.1.11.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.data:spring-data-commons:2.1.11.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-orm:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-context:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-expression:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-tx:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-beans:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:1.7.28" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-aspects:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-data-rest:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-web:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-json:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.9.9" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-parameter-names:2.9.9" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-tomcat:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.apache.tomcat.embed:tomcat-embed-core:9.0.26" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.apache.tomcat.embed:tomcat-embed-el:9.0.26" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.apache.tomcat.embed:tomcat-embed-websocket:9.0.26" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.hibernate.validator:hibernate-validator:6.0.17.Final" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: javax.validation:validation-api:2.0.1.Final" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-webmvc:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.data:spring-data-rest-webmvc:3.1.11.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.data:spring-data-rest-core:3.1.11.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.hateoas:spring-hateoas:0.25.2.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.plugin:spring-plugin-core:1.2.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.atteo:evo-inflector:1.2.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.9.9.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.9.9" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.9.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="RUNTIME" name="Maven: com.h2database:h2:1.4.199" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-starter-openfeign:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-starter:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-context:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.security:spring-security-rsa:1.0.7.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.bouncycastle:bcpkix-jdk15on:1.60" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.bouncycastle:bcprov-jdk15on:1.60" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-openfeign-core:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-autoconfigure:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-netflix-ribbon:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-netflix-archaius:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.github.openfeign.form:feign-form-spring:3.5.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.github.openfeign.form:feign-form:3.5.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: commons-fileupload:commons-fileupload:1.3.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: commons-io:commons-io:2.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-web:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-commons:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.security:spring-security-crypto:5.1.6.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.github.openfeign:feign-core:10.1.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.github.openfeign:feign-slf4j:10.1.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.github.openfeign:feign-hystrix:10.1.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.netflix.archaius:archaius-core:0.7.6" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="RUNTIME" name="Maven: com.google.code.findbugs:jsr305:3.0.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="RUNTIME" name="Maven: commons-configuration:commons-configuration:1.8" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="RUNTIME" name="Maven: commons-lang:commons-lang:2.6" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="RUNTIME" name="Maven: com.google.guava:guava:16.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.netflix.hystrix:hystrix-core:1.5.18" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.reactivex:rxjava:1.3.8" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-starter-stream-kafka:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-stream-binder-kafka:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-stream-binder-kafka-core:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.integration:spring-integration-kafka:3.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-stream:2.1.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-validation:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-messaging:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.integration:spring-integration-core:5.1.8.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.projectreactor:reactor-core:3.2.12.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.reactivestreams:reactive-streams:1.0.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.integration:spring-integration-jmx:5.1.8.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-tuple:1.0.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.esotericsoftware:kryo-shaded:3.0.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.esotericsoftware:minlog:1.3.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.integration:spring-integration-tuple:1.0.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.retry:spring-retry:1.2.4.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-function-context:2.0.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.cloud:spring-cloud-function-core:2.0.0.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.apache.kafka:kafka-clients:2.0.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.lz4:lz4-java:1.4.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.xerial.snappy:snappy-java:1.1.7.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.kafka:spring-kafka:2.2.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-actuator:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-logging:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: ch.qos.logback:logback-classic:1.2.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: ch.qos.logback:logback-core:1.2.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-to-slf4j:2.11.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-api:2.11.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.slf4j:jul-to-slf4j:1.7.28" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: javax.annotation:javax.annotation-api:1.3.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="RUNTIME" name="Maven: org.yaml:snakeyaml:1.23" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-actuator-autoconfigure:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-actuator:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.9.9" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: io.micrometer:micrometer-core:1.1.7" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.hdrhistogram:HdrHistogram:2.1.9" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.latencyutils:LatencyUtils:2.0.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.springframework.boot:spring-boot-starter-test:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.springframework.boot:spring-boot-test:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.springframework.boot:spring-boot-test-autoconfigure:2.1.9.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: com.jayway.jsonpath:json-path:2.4.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: net.minidev:json-smart:2.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: net.minidev:accessors-smart:1.2" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.ow2.asm:asm:5.0.4" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: junit:junit:4.12" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.assertj:assertj-core:3.11.1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.mockito:mockito-core:2.23.4" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: net.bytebuddy:byte-buddy-agent:1.9.16" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.objenesis:objenesis:2.6" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.hamcrest:hamcrest-core:1.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.hamcrest:hamcrest-library:1.3" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.skyscreamer:jsonassert:1.5.0" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: com.vaadin.external.google:android-json:0.0.20131108.vaadin1" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-core:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" name="Maven: org.springframework:spring-jcl:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.springframework:spring-test:5.1.10.RELEASE" level="project" />[m
+[32m+[m[32m    <orderEntry type="library" scope="TEST" name="Maven: org.xmlunit:xmlunit-core:2.6.3" level="project" />[m
+[32m+[m[32m  </component>[m
+[32m+[m[32m</module>[m
+\ No newline at end of file[m
+[1mdiff --git a/kubernetes/deployment.yml b/kubernetes/deployment.yml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..1ffe0bf[m
+[1m--- /dev/null[m
+[1m+++ b/kubernetes/deployment.yml[m
+[36m@@ -0,0 +1,37 @@[m
+[32m+[m[32mapiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: delivery[m
+[32m+[m[32m  labels:[m
+[32m+[m[32m    app: delivery[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  replicas: 1[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    matchLabels:[m
+[32m+[m[32m      app: delivery[m
+[32m+[m[32m  template:[m
+[32m+[m[32m    metadata:[m
+[32m+[m[32m      labels:[m
+[32m+[m[32m        app: delivery[m
+[32m+[m[32m    spec:[m
+[32m+[m[32m      containers:[m
+[32m+[m[32m        - name: delivery[m
+[32m+[m[32m          image: username/delivery:latest[m
+[32m+[m[32m          ports:[m
+[32m+[m[32m            - containerPort: 8080[m
+[32m+[m[32m          readinessProbe:[m
+[32m+[m[32m            httpGet:[m
+[32m+[m[32m              path: '/actuator/health'[m
+[32m+[m[32m              port: 8080[m
+[32m+[m[32m            initialDelaySeconds: 10[m
+[32m+[m[32m            timeoutSeconds: 2[m
+[32m+[m[32m            periodSeconds: 5[m
+[32m+[m[32m            failureThreshold: 10[m
+[32m+[m[32m          livenessProbe:[m
+[32m+[m[32m            httpGet:[m
+[32m+[m[32m              path: '/actuator/health'[m
+[32m+[m[32m              port: 8080[m
+[32m+[m[32m            initialDelaySeconds: 120[m
+[32m+[m[32m            timeoutSeconds: 2[m
+[32m+[m[32m            periodSeconds: 5[m
+[32m+[m[32m            failureThreshold: 5[m
+\ No newline at end of file[m
+[1mdiff --git a/kubernetes/service.yaml b/kubernetes/service.yaml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..053791a[m
+[1m--- /dev/null[m
+[1m+++ b/kubernetes/service.yaml[m
+[36m@@ -0,0 +1,12 @@[m
+[32m+[m[32mapiVersion: v1[m
+[32m+[m[32mkind: Service[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: delivery[m
+[32m+[m[32m  labels:[m
+[32m+[m[32m    app: delivery[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  ports:[m
+[32m+[m[32m    - port: 8080[m
+[32m+[m[32m      targetPort: 8080[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    app: delivery[m
+\ No newline at end of file[m
+[1mdiff --git a/pom.xml b/pom.xml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..af39b1f[m
+[1m--- /dev/null[m
+[1m+++ b/pom.xml[m
+[36m@@ -0,0 +1,90 @@[m
+[32m+[m[32m<?xml version="1.0" encoding="UTF-8"?>[m
+[32m+[m[32m<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"[m
+[32m+[m	[32mxsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">[m
+[32m+[m	[32m<modelVersion>4.0.0</modelVersion>[m
+[32m+[m	[32m<parent>[m
+[32m+[m		[32m<groupId>org.springframework.boot</groupId>[m
+[32m+[m		[32m<artifactId>spring-boot-starter-parent</artifactId>[m
+[32m+[m		[32m<version>2.1.9.RELEASE</version>[m
+[32m+[m		[32m<relativePath/> <!-- lookup parent from repository -->[m
+[32m+[m	[32m</parent>[m
+[32m+[m	[32m<groupId>shop2jjw</groupId>[m
+[32m+[m	[32m<artifactId>delivery</artifactId>[m
+[32m+[m	[32m<version>0.0.1-SNAPSHOT</version>[m
+[32m+[m	[32m<name>delivery</name>[m
+[32m+[m	[32m<description>Demo project for Spring Boot</description>[m
+[32m+[m
+[32m+[m	[32m<properties>[m
+[32m+[m		[32m<java.version>1.8</java.version>[m
+[32m+[m		[32m<spring-cloud.version>Greenwich.RELEASE</spring-cloud.version>[m
+[32m+[m		[32m<spring-cloud-stream.version>Germantown.SR1</spring-cloud-stream.version>[m
+[32m+[m	[32m</properties>[m
+[32m+[m
+[32m+[m	[32m<dependencies>[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>org.springframework.boot</groupId>[m
+[32m+[m			[32m<artifactId>spring-boot-starter-data-jpa</artifactId>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>org.springframework.boot</groupId>[m
+[32m+[m			[32m<artifactId>spring-boot-starter-data-rest</artifactId>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>com.h2database</groupId>[m
+[32m+[m			[32m<artifactId>h2</artifactId>[m
+[32m+[m			[32m<scope>runtime</scope>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>org.springframework.cloud</groupId>[m
+[32m+[m			[32m<artifactId>spring-cloud-starter-openfeign</artifactId>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m
+[32m+[m
+[32m+[m		[32m<!-- kafka streams -->[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>org.springframework.cloud</groupId>[m
+[32m+[m			[32m<artifactId>spring-cloud-starter-stream-kafka</artifactId>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>org.springframework.boot</groupId>[m
+[32m+[m			[32m<artifactId>spring-boot-starter-actuator</artifactId>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m
+[32m+[m		[32m<dependency>[m
+[32m+[m			[32m<groupId>org.springframework.boot</groupId>[m
+[32m+[m			[32m<artifactId>spring-boot-starter-test</artifactId>[m
+[32m+[m			[32m<scope>test</scope>[m
+[32m+[m		[32m</dependency>[m
+[32m+[m	[32m</dependencies>[m
+[32m+[m
+[32m+[m	[32m<dependencyManagement>[m
+[32m+[m		[32m<dependencies>[m
+[32m+[m			[32m<dependency>[m
+[32m+[m				[32m<groupId>org.springframework.cloud</groupId>[m
+[32m+[m				[32m<artifactId>spring-cloud-dependencies</artifactId>[m
+[32m+[m				[32m<version>${spring-cloud.version}</version>[m
+[32m+[m				[32m<type>pom</type>[m
+[32m+[m				[32m<scope>import</scope>[m
+[32m+[m			[32m</dependency>[m
+[32m+[m			[32m<dependency>[m
+[32m+[m				[32m<groupId>org.springframework.cloud</groupId>[m
+[32m+[m				[32m<artifactId>spring-cloud-stream-dependencies</artifactId>[m
+[32m+[m				[32m<version>${spring-cloud-stream.version}</version>[m
+[32m+[m				[32m<type>pom</type>[m
+[32m+[m				[32m<scope>import</scope>[m
+[32m+[m			[32m</dependency>[m
+[32m+[m		[32m</dependencies>[m
+[32m+[m	[32m</dependencyManagement>[m
+[32m+[m
+[32m+[m	[32m<build>[m
+[32m+[m		[32m<plugins>[m
+[32m+[m			[32m<plugin>[m
+[32m+[m				[32m<groupId>org.springframework.boot</groupId>[m
+[32m+[m				[32m<artifactId>spring-boot-maven-plugin</artifactId>[m
+[32m+[m			[32m</plugin>[m
+[32m+[m		[32m</plugins>[m
+[32m+[m	[32m</build>[m
+[32m+[m
+[32m+[m[32m</project>[m
+[1mdiff --git a/src/main/java/shop2jjw/AbstractEvent.java b/src/main/java/shop2jjw/AbstractEvent.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..9d3da62[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/AbstractEvent.java[m
+[36m@@ -0,0 +1,91 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport shop2jjw.config.kafka.KafkaProcessor;[m
+[32m+[m[32mimport com.fasterxml.jackson.core.JsonProcessingException;[m
+[32m+[m[32mimport com.fasterxml.jackson.databind.ObjectMapper;[m
+[32m+[m[32mimport org.springframework.messaging.MessageChannel;[m
+[32m+[m[32mimport org.springframework.messaging.MessageHeaders;[m
+[32m+[m[32mimport org.springframework.messaging.support.MessageBuilder;[m
+[32m+[m[32mimport org.springframework.util.MimeTypeUtils;[m
+[32m+[m[32mimport org.springframework.transaction.support.TransactionSynchronizationAdapter;[m
+[32m+[m[32mimport org.springframework.transaction.support.TransactionSynchronizationManager;[m
+[32m+[m
+[32m+[m[32mimport java.text.SimpleDateFormat;[m
+[32m+[m[32mimport java.util.Date;[m
+[32m+[m
+[32m+[m[32mpublic class AbstractEvent {[m
+[32m+[m
+[32m+[m[32m    String eventType;[m
+[32m+[m[32m    String timestamp;[m
+[32m+[m
+[32m+[m[32m    public AbstractEvent(){[m
+[32m+[m[32m        this.setEventType(this.getClass().getSimpleName());[m
+[32m+[m[32m        SimpleDateFormat defaultSimpleDateFormat = new SimpleDateFormat("YYYYMMddHHmmss");[m
+[32m+[m[32m        this.timestamp = defaultSimpleDateFormat.format(new Date());[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public String toJson(){[m
+[32m+[m[32m        ObjectMapper objectMapper = new ObjectMapper();[m
+[32m+[m[32m        String json = null;[m
+[32m+[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            json = objectMapper.writeValueAsString(this);[m
+[32m+[m[32m        } catch (JsonProcessingException e) {[m
+[32m+[m[32m            throw new RuntimeException("JSON format exception", e);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return json;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void publish(String json){[m
+[32m+[m[32m        if( json != null ){[m
+[32m+[m
+[32m+[m[32m            /**[m
+[32m+[m[32m             * spring streams 방식[m
+[32m+[m[32m             */[m
+[32m+[m[32m            KafkaProcessor processor = Application.applicationContext.getBean(KafkaProcessor.class);[m
+[32m+[m[32m            MessageChannel outputChannel = processor.outboundTopic();[m
+[32m+[m
+[32m+[m[32m            outputChannel.send(MessageBuilder[m
+[32m+[m[32m                    .withPayload(json)[m
+[32m+[m[32m                    .setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_JSON)[m
+[32m+[m[32m                    .build());[m
+[32m+[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void publish(){[m
+[32m+[m[32m        this.publish(this.toJson());[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void publishAfterCommit(){[m
+[32m+[m[32m        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {[m
+[32m+[m
+[32m+[m[32m            @Override[m
+[32m+[m[32m            public void afterCompletion(int status) {[m
+[32m+[m[32m                AbstractEvent.this.publish();[m
+[32m+[m[32m            }[m
+[32m+[m[32m        });[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m
+[32m+[m[32m    public String getEventType() {[m
+[32m+[m[32m        return eventType;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setEventType(String eventType) {[m
+[32m+[m[32m        this.eventType = eventType;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public String getTimestamp() {[m
+[32m+[m[32m        return timestamp;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setTimestamp(String timestamp) {[m
+[32m+[m[32m        this.timestamp = timestamp;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public boolean isMe(){[m
+[32m+[m[32m        return getEventType().equals(getClass().getSimpleName());[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/Application.java b/src/main/java/shop2jjw/Application.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..d22e609[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/Application.java[m
+[36m@@ -0,0 +1,18 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m[32mimport shop2jjw.config.kafka.KafkaProcessor;[m
+[32m+[m[32mimport org.springframework.boot.SpringApplication;[m
+[32m+[m[32mimport org.springframework.boot.autoconfigure.SpringBootApplication;[m
+[32m+[m[32mimport org.springframework.context.ApplicationContext;[m
+[32m+[m[32mimport org.springframework.cloud.stream.annotation.EnableBinding;[m
+[32m+[m[32mimport org.springframework.cloud.openfeign.EnableFeignClients;[m
+[32m+[m
+[32m+[m
+[32m+[m[32m@SpringBootApplication[m
+[32m+[m[32m@EnableBinding(KafkaProcessor.class)[m
+[32m+[m[32m@EnableFeignClients[m
+[32m+[m[32mpublic class Application {[m
+[32m+[m[32m    protected static ApplicationContext applicationContext;[m
+[32m+[m[32m    public static void main(String[] args) {[m
+[32m+[m[32m        applicationContext = SpringApplication.run(Application.class, args);[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/Cancellation.java b/src/main/java/shop2jjw/Cancellation.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..372b25b[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/Cancellation.java[m
+[36m@@ -0,0 +1,52 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport javax.persistence.*;[m
+[32m+[m[32mimport org.springframework.beans.BeanUtils;[m
+[32m+[m[32mimport java.util.List;[m
+[32m+[m
+[32m+[m[32m@Entity[m
+[32m+[m[32m@Table(name="Cancellation_table")[m
+[32m+[m[32mpublic class Cancellation {[m
+[32m+[m
+[32m+[m[32m    @Id[m
+[32m+[m[32m    @GeneratedValue(strategy=GenerationType.AUTO)[m
+[32m+[m[32m    private Long id;[m
+[32m+[m[32m    private String orderId;[m
+[32m+[m[32m    private String status;[m
+[32m+[m
+[32m+[m[32m    @PostPersist[m
+[32m+[m[32m    public void onPostPersist(){[m
+[32m+[m[32m        DeliveryCanceled deliveryCanceled = new DeliveryCanceled();[m
+[32m+[m[32m        BeanUtils.copyProperties(this, deliveryCanceled);[m
+[32m+[m[32m        deliveryCanceled.publishAfterCommit();[m
+[32m+[m
+[32m+[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m
+[32m+[m[32m    public Long getId() {[m
+[32m+[m[32m        return id;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setId(Long id) {[m
+[32m+[m[32m        this.id = id;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getOrderId() {[m
+[32m+[m[32m        return orderId;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setOrderId(String orderId) {[m
+[32m+[m[32m        this.orderId = orderId;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getStatus() {[m
+[32m+[m[32m        return status;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setStatus(String status) {[m
+[32m+[m[32m        this.status = status;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/CancellationController.java b/src/main/java/shop2jjw/CancellationController.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..047d8cb[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/CancellationController.java[m
+[36m@@ -0,0 +1,16 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport org.springframework.beans.factory.annotation.Autowired;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.PathVariable;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.RequestMapping;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.RequestMethod;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.RestController;[m
+[32m+[m[32mimport javax.servlet.http.HttpServletRequest;[m
+[32m+[m[32mimport javax.servlet.http.HttpServletResponse;[m
+[32m+[m[32mimport java.util.List;[m
+[32m+[m
+[32m+[m[32m @RestController[m
+[32m+[m[32m public class CancellationController {[m
+[32m+[m
+[32m+[m
+[32m+[m[32m }[m
+[1mdiff --git a/src/main/java/shop2jjw/CancellationRepository.java b/src/main/java/shop2jjw/CancellationRepository.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..15a48b3[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/CancellationRepository.java[m
+[36m@@ -0,0 +1,8 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport org.springframework.data.repository.PagingAndSortingRepository;[m
+[32m+[m
+[32m+[m[32mpublic interface CancellationRepository extends PagingAndSortingRepository<Cancellation, Long>{[m
+[32m+[m
+[32m+[m
+[32m+[m[32m}[m
+\ No newline at end of file[m
+[1mdiff --git a/src/main/java/shop2jjw/Delivery.java b/src/main/java/shop2jjw/Delivery.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..cf8c99e[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/Delivery.java[m
+[36m@@ -0,0 +1,51 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport javax.persistence.*;[m
+[32m+[m[32mimport org.springframework.beans.BeanUtils;[m
+[32m+[m[32mimport java.util.List;[m
+[32m+[m
+[32m+[m[32m@Entity[m
+[32m+[m[32m@Table(name="Delivery_table")[m
+[32m+[m[32mpublic class Delivery {[m
+[32m+[m
+[32m+[m[32m    @Id[m
+[32m+[m[32m    @GeneratedValue(strategy=GenerationType.AUTO)[m
+[32m+[m[32m    private Long id;[m
+[32m+[m[32m    private Long orderId;[m
+[32m+[m[32m    private String status;[m
+[32m+[m
+[32m+[m[32m    @PostPersist[m
+[32m+[m[32m    public void onPostPersist(){[m
+[32m+[m[32m        Shipped shipped = new Shipped();[m
+[32m+[m[32m        BeanUtils.copyProperties(this, shipped);[m
+[32m+[m[32m        shipped.publishAfterCommit();[m
+[32m+[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m
+[32m+[m[32m    public Long getId() {[m
+[32m+[m[32m        return id;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setId(Long id) {[m
+[32m+[m[32m        this.id = id;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public Long getOrderId() {[m
+[32m+[m[32m        return orderId;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setOrderId(Long orderId) {[m
+[32m+[m[32m        this.orderId = orderId;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getStatus() {[m
+[32m+[m[32m        return status;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setStatus(String status) {[m
+[32m+[m[32m        this.status = status;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/DeliveryCanceled.java b/src/main/java/shop2jjw/DeliveryCanceled.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..bfbdeee[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/DeliveryCanceled.java[m
+[36m@@ -0,0 +1,34 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mpublic class DeliveryCanceled extends AbstractEvent {[m
+[32m+[m
+[32m+[m[32m    private Long id;[m
+[32m+[m[32m    private String orderId;[m
+[32m+[m[32m    private String status;[m
+[32m+[m
+[32m+[m[32m    public DeliveryCanceled(){[m
+[32m+[m[32m        super();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public Long getId() {[m
+[32m+[m[32m        return id;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setId(Long id) {[m
+[32m+[m[32m        this.id = id;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getOrderId() {[m
+[32m+[m[32m        return orderId;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setOrderId(String orderId) {[m
+[32m+[m[32m        this.orderId = orderId;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getStatus() {[m
+[32m+[m[32m        return status;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setStatus(String status) {[m
+[32m+[m[32m        this.status = status;[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/DeliveryController.java b/src/main/java/shop2jjw/DeliveryController.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e164584[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/DeliveryController.java[m
+[36m@@ -0,0 +1,14 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport org.springframework.beans.factory.annotation.Autowired;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.PathVariable;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.RequestMapping;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.RequestMethod;[m
+[32m+[m[32mimport org.springframework.web.bind.annotation.RestController;[m
+[32m+[m[32mimport javax.servlet.http.HttpServletRequest;[m
+[32m+[m[32mimport javax.servlet.http.HttpServletResponse;[m
+[32m+[m[32mimport java.util.List;[m
+[32m+[m
+[32m+[m[32m @RestController[m
+[32m+[m[32m public class DeliveryController {[m
+[32m+[m[32m }[m
+[1mdiff --git a/src/main/java/shop2jjw/DeliveryRepository.java b/src/main/java/shop2jjw/DeliveryRepository.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..d6ef2e1[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/DeliveryRepository.java[m
+[36m@@ -0,0 +1,8 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport org.springframework.data.repository.PagingAndSortingRepository;[m
+[32m+[m
+[32m+[m[32mpublic interface DeliveryRepository extends PagingAndSortingRepository<Delivery, Long>{[m
+[32m+[m
+[32m+[m
+[32m+[m[32m}[m
+\ No newline at end of file[m
+[1mdiff --git a/src/main/java/shop2jjw/Ordered.java b/src/main/java/shop2jjw/Ordered.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..951023b[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/Ordered.java[m
+[36m@@ -0,0 +1,34 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mpublic class Ordered extends AbstractEvent {[m
+[32m+[m
+[32m+[m[32m    private Long id;[m
+[32m+[m[32m    private String productId;[m
+[32m+[m[32m    private Integer qty;[m
+[32m+[m
+[32m+[m[32m    public Ordered(){[m
+[32m+[m[32m        super();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public Long getId() {[m
+[32m+[m[32m        return id;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setId(Long id) {[m
+[32m+[m[32m        this.id = id;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getProductId() {[m
+[32m+[m[32m        return productId;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setProductId(String productId) {[m
+[32m+[m[32m        this.productId = productId;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public Integer getQty() {[m
+[32m+[m[32m        return qty;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setQty(Integer qty) {[m
+[32m+[m[32m        this.qty = qty;[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/PolicyHandler.java b/src/main/java/shop2jjw/PolicyHandler.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..447e512[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/PolicyHandler.java[m
+[36m@@ -0,0 +1,27 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mimport shop2jjw.config.kafka.KafkaProcessor;[m
+[32m+[m[32mimport com.fasterxml.jackson.databind.DeserializationFeature;[m
+[32m+[m[32mimport com.fasterxml.jackson.databind.ObjectMapper;[m
+[32m+[m[32mimport org.springframework.beans.factory.annotation.Autowired;[m
+[32m+[m[32mimport org.springframework.cloud.stream.annotation.StreamListener;[m
+[32m+[m[32mimport org.springframework.messaging.handler.annotation.Payload;[m
+[32m+[m[32mimport org.springframework.stereotype.Service;[m
+[32m+[m
+[32m+[m[32m@Service[m
+[32m+[m[32mpublic class PolicyHandler{[m
+[32m+[m[32m    @Autowired[m
+[32m+[m[32m    DeliveryRepository deliveryRepository;[m
+[32m+[m
+[32m+[m[32m    @StreamListener(KafkaProcessor.INPUT)[m
+[32m+[m[32m    public void wheneverOrdered_Ship(@Payload Ordered ordered){[m
+[32m+[m
+[32m+[m[32m        if(ordered.isMe()){[m
+[32m+[m[32m            Delivery delivery = new Delivery();[m
+[32m+[m[32m            delivery.setOrderId(ordered.getId());[m
+[32m+[m[32m            delivery.setStatus("SHIPPED");[m
+[32m+[m
+[32m+[m[32m            deliveryRepository.save(delivery);[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/Shipped.java b/src/main/java/shop2jjw/Shipped.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..824537b[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/Shipped.java[m
+[36m@@ -0,0 +1,34 @@[m
+[32m+[m[32mpackage shop2jjw;[m
+[32m+[m
+[32m+[m[32mpublic class Shipped extends AbstractEvent {[m
+[32m+[m
+[32m+[m[32m    private Long id;[m
+[32m+[m[32m    private Long orderId;[m
+[32m+[m[32m    private String status;[m
+[32m+[m
+[32m+[m[32m    public Shipped(){[m
+[32m+[m[32m        super();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public Long getId() {[m
+[32m+[m[32m        return id;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setId(Long id) {[m
+[32m+[m[32m        this.id = id;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public Long getOrderId() {[m
+[32m+[m[32m        return orderId;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setOrderId(Long orderId) {[m
+[32m+[m[32m        this.orderId = orderId;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    public String getStatus() {[m
+[32m+[m[32m        return status;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public void setStatus(String status) {[m
+[32m+[m[32m        this.status = status;[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/java/shop2jjw/config/kafka/KafkaProcessor.java b/src/main/java/shop2jjw/config/kafka/KafkaProcessor.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..243df4a[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/java/shop2jjw/config/kafka/KafkaProcessor.java[m
+[36m@@ -0,0 +1,19 @@[m
+[32m+[m[32mpackage shop2jjw.config.kafka;[m
+[32m+[m
+[32m+[m[32mimport org.springframework.cloud.stream.annotation.Input;[m
+[32m+[m[32mimport org.springframework.cloud.stream.annotation.Output;[m
+[32m+[m[32mimport org.springframework.messaging.MessageChannel;[m
+[32m+[m[32mimport org.springframework.messaging.SubscribableChannel;[m
+[32m+[m
+[32m+[m[32mpublic interface KafkaProcessor {[m
+[32m+[m
+[32m+[m[32m    String INPUT = "event-in";[m
+[32m+[m[32m    String OUTPUT = "event-out";[m
+[32m+[m
+[32m+[m[32m    @Input(INPUT)[m
+[32m+[m[32m    SubscribableChannel inboundTopic();[m
+[32m+[m
+[32m+[m[32m    @Output(OUTPUT)[m
+[32m+[m[32m    MessageChannel outboundTopic();[m
+[32m+[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/main/resources/application.yml b/src/main/resources/application.yml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..8b4e175[m
+[1m--- /dev/null[m
+[1m+++ b/src/main/resources/application.yml[m
+[36m@@ -0,0 +1,64 @@[m
+[32m+[m[32mserver:[m
+[32m+[m[32m  port: 8080[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32mspring:[m
+[32m+[m[32m  profiles: default[m
+[32m+[m[32m  jpa:[m
+[32m+[m[32m    properties:[m
+[32m+[m[32m      hibernate:[m
+[32m+[m[32m        show_sql: true[m
+[32m+[m[32m        format_sql: true[m
+[32m+[m[32m  cloud:[m
+[32m+[m[32m    stream:[m
+[32m+[m[32m      kafka:[m
+[32m+[m[32m        binder:[m
+[32m+[m[32m          brokers: localhost:9092[m
+[32m+[m[32m        streams:[m
+[32m+[m[32m          binder:[m
+[32m+[m[32m            configuration:[m
+[32m+[m[32m              default:[m
+[32m+[m[32m                key:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m                value:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m      bindings:[m
+[32m+[m[32m        event-in:[m
+[32m+[m[32m          group: delivery[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[32m+[m[32m        event-out:[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[32m+[m
+[32m+[m[32mlogging:[m
+[32m+[m[32m  level:[m
+[32m+[m[32m    org.hibernate.type: trace[m
+[32m+[m[32m    org.springframework.cloud: debug[m
+[32m+[m[32mserver:[m
+[32m+[m[32m  port: 8082[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32mspring:[m
+[32m+[m[32m  profiles: docker[m
+[32m+[m[32m  cloud:[m
+[32m+[m[32m    stream:[m
+[32m+[m[32m      kafka:[m
+[32m+[m[32m        binder:[m
+[32m+[m[32m          brokers: my-kafka.kafka.svc.cluster.local:9092[m
+[32m+[m[32m        streams:[m
+[32m+[m[32m          binder:[m
+[32m+[m[32m            configuration:[m
+[32m+[m[32m              default:[m
+[32m+[m[32m                key:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m                value:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m      bindings:[m
+[32m+[m[32m        event-in:[m
+[32m+[m[32m          group: delivery[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[32m+[m[32m        event-out:[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[1mdiff --git a/target/classes/application.yml b/target/classes/application.yml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..8b4e175[m
+[1m--- /dev/null[m
+[1m+++ b/target/classes/application.yml[m
+[36m@@ -0,0 +1,64 @@[m
+[32m+[m[32mserver:[m
+[32m+[m[32m  port: 8080[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32mspring:[m
+[32m+[m[32m  profiles: default[m
+[32m+[m[32m  jpa:[m
+[32m+[m[32m    properties:[m
+[32m+[m[32m      hibernate:[m
+[32m+[m[32m        show_sql: true[m
+[32m+[m[32m        format_sql: true[m
+[32m+[m[32m  cloud:[m
+[32m+[m[32m    stream:[m
+[32m+[m[32m      kafka:[m
+[32m+[m[32m        binder:[m
+[32m+[m[32m          brokers: localhost:9092[m
+[32m+[m[32m        streams:[m
+[32m+[m[32m          binder:[m
+[32m+[m[32m            configuration:[m
+[32m+[m[32m              default:[m
+[32m+[m[32m                key:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m                value:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m      bindings:[m
+[32m+[m[32m        event-in:[m
+[32m+[m[32m          group: delivery[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[32m+[m[32m        event-out:[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[32m+[m
+[32m+[m[32mlogging:[m
+[32m+[m[32m  level:[m
+[32m+[m[32m    org.hibernate.type: trace[m
+[32m+[m[32m    org.springframework.cloud: debug[m
+[32m+[m[32mserver:[m
+[32m+[m[32m  port: 8082[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32mspring:[m
+[32m+[m[32m  profiles: docker[m
+[32m+[m[32m  cloud:[m
+[32m+[m[32m    stream:[m
+[32m+[m[32m      kafka:[m
+[32m+[m[32m        binder:[m
+[32m+[m[32m          brokers: my-kafka.kafka.svc.cluster.local:9092[m
+[32m+[m[32m        streams:[m
+[32m+[m[32m          binder:[m
+[32m+[m[32m            configuration:[m
+[32m+[m[32m              default:[m
+[32m+[m[32m                key:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m                value:[m
+[32m+[m[32m                  serde: org.apache.kafka.common.serialization.Serdes$StringSerde[m
+[32m+[m[32m      bindings:[m
+[32m+[m[32m        event-in:[m
+[32m+[m[32m          group: delivery[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[32m+[m[32m        event-out:[m
+[32m+[m[32m          destination: shop2jjw[m
+[32m+[m[32m          contentType: application/json[m
+[1mdiff --git a/target/classes/shop2jjw/AbstractEvent$1.class b/target/classes/shop2jjw/AbstractEvent$1.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..4c9f472[m
+Binary files /dev/null and b/target/classes/shop2jjw/AbstractEvent$1.class differ
+[1mdiff --git a/target/classes/shop2jjw/AbstractEvent.class b/target/classes/shop2jjw/AbstractEvent.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..6fbb024[m
+Binary files /dev/null and b/target/classes/shop2jjw/AbstractEvent.class differ
+[1mdiff --git a/target/classes/shop2jjw/Application.class b/target/classes/shop2jjw/Application.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..edf39b1[m
+Binary files /dev/null and b/target/classes/shop2jjw/Application.class differ
+[1mdiff --git a/target/classes/shop2jjw/Cancellation.class b/target/classes/shop2jjw/Cancellation.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..f5c3ce1[m
+Binary files /dev/null and b/target/classes/shop2jjw/Cancellation.class differ
+[1mdiff --git a/target/classes/shop2jjw/CancellationController.class b/target/classes/shop2jjw/CancellationController.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..fba1f42[m
+Binary files /dev/null and b/target/classes/shop2jjw/CancellationController.class differ
+[1mdiff --git a/target/classes/shop2jjw/CancellationRepository.class b/target/classes/shop2jjw/CancellationRepository.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..b36e8e3[m
+Binary files /dev/null and b/target/classes/shop2jjw/CancellationRepository.class differ
+[1mdiff --git a/target/classes/shop2jjw/Delivery.class b/target/classes/shop2jjw/Delivery.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..12c7e9a[m
+Binary files /dev/null and b/target/classes/shop2jjw/Delivery.class differ
+[1mdiff --git a/target/classes/shop2jjw/DeliveryCanceled.class b/target/classes/shop2jjw/DeliveryCanceled.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..bd06916[m
+Binary files /dev/null and b/target/classes/shop2jjw/DeliveryCanceled.class differ
+[1mdiff --git a/target/classes/shop2jjw/DeliveryController.class b/target/classes/shop2jjw/DeliveryController.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..10c6425[m
+Binary files /dev/null and b/target/classes/shop2jjw/DeliveryController.class differ
+[1mdiff --git a/target/classes/shop2jjw/DeliveryRepository.class b/target/classes/shop2jjw/DeliveryRepository.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..20c1fe3[m
+Binary files /dev/null and b/target/classes/shop2jjw/DeliveryRepository.class differ
+[1mdiff --git a/target/classes/shop2jjw/Ordered.class b/target/classes/shop2jjw/Ordered.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..9a52501[m
+Binary files /dev/null and b/target/classes/shop2jjw/Ordered.class differ
+[1mdiff --git a/target/classes/shop2jjw/PolicyHandler.class b/target/classes/shop2jjw/PolicyHandler.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..b812986[m
+Binary files /dev/null and b/target/classes/shop2jjw/PolicyHandler.class differ
+[1mdiff --git a/target/classes/shop2jjw/Shipped.class b/target/classes/shop2jjw/Shipped.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..789775f[m
+Binary files /dev/null and b/target/classes/shop2jjw/Shipped.class differ
+[1mdiff --git a/target/classes/shop2jjw/config/kafka/KafkaProcessor.class b/target/classes/shop2jjw/config/kafka/KafkaProcessor.class[m
+[1mnew file mode 100644[m
+[1mindex 0000000..a1b8772[m
+Binary files /dev/null and b/target/classes/shop2jjw/config/kafka/KafkaProcessor.class differ
+[1mdiff --git a/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst b/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst[m
+[1mnew file mode 100644[m
+[1mindex 0000000..d5f9740[m
+[1m--- /dev/null[m
+[1m+++ b/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst[m
+[36m@@ -0,0 +1,14 @@[m
+[32m+[m[32mshop2jjw\Cancellation.class[m
+[32m+[m[32mshop2jjw\DeliveryCanceled.class[m
+[32m+[m[32mshop2jjw\Delivery.class[m
+[32m+[m[32mshop2jjw\Application.class[m
+[32m+[m[32mshop2jjw\AbstractEvent$1.class[m
+[32m+[m[32mshop2jjw\config\kafka\KafkaProcessor.class[m
+[32m+[m[32mshop2jjw\CancellationController.class[m
+[32m+[m[32mshop2jjw\CancellationRepository.class[m
+[32m+[m[32mshop2jjw\Ordered.class[m
+[32m+[m[32mshop2jjw\AbstractEvent.class[m
+[32m+[m[32mshop2jjw\DeliveryRepository.class[m
+[32m+[m[32mshop2jjw\DeliveryController.class[m
+[32m+[m[32mshop2jjw\Shipped.class[m
+[32m+[m[32mshop2jjw\PolicyHandler.class[m
+[1mdiff --git a/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst b/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst[m
+[1mnew file mode 100644[m
+[1mindex 0000000..0973fce[m
+[1m--- /dev/null[m
+[1m+++ b/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst[m
+[36m@@ -0,0 +1,12 @@[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\DeliveryRepository.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\Application.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\Shipped.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\config\kafka\KafkaProcessor.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\PolicyHandler.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\CancellationController.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\Cancellation.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\AbstractEvent.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\CancellationRepository.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\Delivery.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\DeliveryCanceled.java[m
+[32m+[m[32mC:\Users\SKCC\Downloads\demo (2)\delivery\src\main\java\shop2jjw\DeliveryController.java[m
